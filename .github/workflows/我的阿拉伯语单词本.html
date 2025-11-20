@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>阿拉伯语智能背词</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--primary:#4CAF50;--danger:#F44336;--bg:#F2F3F5;--card-bg:#FFF;}
+*{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--bg);margin:0;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
+.header-bar{width:100%;padding:15px 20px;display:flex;justify-content:space-between;color:#666;font-size:14px;font-weight:bold;background:var(--bg);z-index:10;}
+.main-scroll-area{flex:1;width:100%;max-width:500px;overflow-y:auto;padding:0 20px 100px 20px;display:flex;flex-direction:column;align-items:center;}
+.card-inner{width:100%;background:var(--card-bg);border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.05);overflow:hidden;margin-bottom:20px;}
+.word-header{display:flex;flex-direction:column;align-items:center;padding:25px 20px 15px;background:linear-gradient(to bottom,#fff,#fafafa);}
+.pos-badge{font-size:12px;color:#2E7D32;background:#E8F5E9;padding:4px 12px;border-radius:12px;font-weight:700;margin-bottom:15px;}
+.ar-word{font-family:'Amiri',serif;font-size:52px;font-weight:700;color:#000;text-align:center;line-height:1.4;}
+.ipa{font-family:monospace;color:#666;font-size:16px;margin:5px 0 10px;}
+.audio-icon{width:40px;height:40px;border-radius:50%;background:#f5f5f5;color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;}
+.tags-container{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;padding:10px 20px 20px;border-bottom:1px dashed #eee;}
+.tag{font-size:12px;padding:4px 10px;border-radius:8px;background:#f7f7f7;color:#555;display:flex;align-items:center;}
+.tag-val{font-family:'Amiri',serif;font-weight:bold;color:#333;margin-left:4px;}
+.options-area{padding:20px;display:flex;flex-direction:column;gap:12px;}
+.option-btn{width:100%;padding:18px 20px;background:#fff;border:2px solid #f0f0f0;border-radius:16px;font-size:17px;text-align:left;cursor:pointer;transition:0.2s;font-weight:500;}
+.option-btn.correct{background:var(--primary);color:#fff;border-color:var(--primary);}
+.option-btn.wrong{background:var(--danger);color:#fff;border-color:var(--danger);animation:shake 0.4s;}
+.fixed-footer{position:fixed;bottom:0;left:0;width:100%;padding:15px 20px 25px;background:rgba(255,255,255,0.95);backdrop-filter:blur(10px);border-top:1px solid #eee;display:flex;justify-content:center;z-index:100;}
+.footer-inner{width:100%;max-width:500px;display:flex;gap:15px;}
+.action-btn{flex:1;padding:14px;border:none;border-radius:14px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,0.05);}
+.btn-show{background:#fff;border:2px solid #eee;color:#555;}
+.btn-next{background:var(--primary);color:#fff;}
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:998;opacity:0;pointer-events:none;transition:opacity 0.3s;}
+.modal-overlay.show{opacity:1;pointer-events:auto;}
+.bottom-sheet{position:fixed;bottom:-100%;left:0;width:100%;background:#fff;border-radius:24px 24px 0 0;z-index:999;transition:bottom 0.4s cubic-bezier(0.19,1,0.22,1);display:flex;flex-direction:column;max-height:85vh;box-shadow:0 -10px 40px rgba(0,0,0,0.2);}
+.bottom-sheet.show{bottom:0;}
+.sheet-content{padding:20px;overflow-y:auto;flex:1;}
+.sheet-footer{padding:15px 20px 25px;border-top:1px solid #eee;}
+.detail-block{margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #f5f5f5;}
+.detail-ar{font-family:'Amiri',serif;font-size:22px;direction:rtl;margin-bottom:5px;}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
+</style>
+</head>
+<body>
+<div class="header-bar"><span id="progress-text">1 / 10</span><span id="score-text">得分: 0</span></div>
+<div class="main-scroll-area">
+    <div class="card-inner">
+        <div class="word-header">
+            <div class="pos-badge" id="pos-display"></div>
+            <div class="ar-word" id="word-display"></div>
+            <div class="ipa" id="ipa-display"></div>
+            <div class="audio-icon" onclick="speakCurrent()">🔊</div>
+        </div>
+        <div class="tags-container" id="tags-container"></div>
+        <div class="options-area" id="options-container"></div>
+    </div>
+</div>
+<div class="fixed-footer"><div class="footer-inner"><button class="action-btn btn-show" onclick="openSheet()">💡 偷看/详情</button><button class="action-btn btn-next" onclick="nextWord()">下一个 ➜</button></div></div>
+<div class="modal-overlay" onclick="closeSheet()"></div>
+<div class="bottom-sheet" id="detail-sheet">
+    <div style="padding:15px;text-align:center;border-bottom:1px solid #eee;"><div style="width:40px;height:5px;background:#ddd;border-radius:5px;margin:0 auto 10px;"></div><div style="font-weight:bold;color:var(--primary);">单词详解</div></div>
+    <div class="sheet-content">
+        <div class="detail-block"><div style="font-size:12px;color:#999;">释义</div><div id="sheet-def-cn" style="font-size:18px;font-weight:bold;"></div><div id="sheet-def-ar" class="detail-ar" style="color:#666;font-size:18px;"></div></div>
+        <div class="detail-block" id="sheet-collo-box"><div style="font-size:12px;color:#999;">搭配</div><div id="sheet-collo-ar" class="detail-ar"></div><div id="sheet-collo-cn" style="color:#444;"></div></div>
+        <div class="detail-block" id="sheet-sent-box"><div style="font-size:12px;color:#999;">例句</div><div id="sheet-sent-ar" class="detail-ar"></div><div id="sheet-sent-cn" style="color:#444;"></div></div>
+    </div>
+    <div class="sheet-footer"><button class="action-btn btn-next" style="width:100%" onclick="nextWord()">懂了，下一个 ➜</button></div>
+</div>
+<script>
+const vocabData = [{"id":1,"word":"عَمَّة","ipa":"['amma]","root":"عمم","pos":"名词","def_cn":"姑，姑妈","def_ar":"أُخْتُ الْأَبِ","plural":"عَمَّات","fem":"","present":"","source":"","collo_ar":"عَمَّةٌ حَنُونَةٌ","collo_cn":"慈祥的姑妈","sent_ar":"زَارَتْنَا عَمَّتِي أَمْسِ.","sent_cn":"我姑姑昨天来看我们了。"},{"id":2,"word":"رَحْمَة","ipa":"[raḥma]","root":"رحم","pos":"名词","def_cn":"天恩，安拉的慈恩","def_ar":"رِقَّةٌ وَعَطْفٌ","plural":"رَحَمَات","fem":"","present":"","source":"","collo_ar":"رَحْمَةُ اللهِ","collo_cn":"安拉的慈恩","sent_ar":"رَحْمَةُ اللهِ وَاسِعَةٌ.","sent_cn":"安拉的慈恩是浩荡的。"},{"id":3,"word":"بَرَكَة","ipa":"[baraka]","root":"برك","pos":"名词","def_cn":"吉祥，祝福","def_ar":"نَمَاءٌ وَزِيَادَةٌ","plural":"بَرَكَات","fem":"","present":"","source":"","collo_ar":"حَلَّتِ الْبَرَكَةُ","collo_cn":"吉祥降临","sent_ar":"بَارَكَ اللهُ فِيكَ.","sent_cn":"愿主赐福于你。"},{"id":4,"word":"صَعِدَ","ipa":"[ṣa'ida]","root":"صعد","pos":"动词","def_cn":"上楼梯，爬山","def_ar":"اِرْتَفَعَ","plural":"","fem":"","present":"يَصْعَدُ","source":"صُعُودًا","collo_ar":"صَعِدَ السُّلَّمَ","collo_cn":"上楼梯","sent_ar":"صَعِدَ الْمُسَافِرُ الْجَبَلَ.","sent_cn":"旅客登上了山。"},{"id":5,"word":"سُلَّم","ipa":"[sullam]","root":"سلم","pos":"名词","def_cn":"梯子，阶梯","def_ar":"مِرْقَاة","plural":"سَلَالِم","fem":"","present":"","source":"","collo_ar":"سُلَّمٌ خَشَبِيٌّ","collo_cn":"木梯","sent_ar":"سَقَطَ مِنَ السُّلَّمِ.","sent_cn":"他从梯子上摔下来了。"},{"id":6,"word":"خَال","ipa":"[khāl]","root":"خول","pos":"名词","def_cn":"舅舅","def_ar":"أَخُو الْأُمِّ","plural":"أَخْوَال","fem":"","present":"","source":"","collo_ar":"خَالِي الْعَزِيزُ","collo_cn":"亲爱的舅舅","sent_ar":"ذَهَبْتُ إِلَى بَيْتِ خَالِي.","sent_cn":"我去了舅舅家。"},{"id":7,"word":"نَازِل","ipa":"[nāzil]","root":"نزل","pos":"形容词","def_cn":"下来的，下降的","def_ar":"هَابِط","plural":"نَازِلُون","fem":"نَازِلَة","present":"","source":"","collo_ar":"مَطَرٌ نَازِلٌ","collo_cn":"降下的雨","sent_ar":"هُوَ نَازِلٌ مِنَ الْقِطَارِ.","sent_cn":"他正从火车上下来。"},{"id":8,"word":"اِشْتَاقَ","ipa":"[ishtāqa]","root":"شوق","pos":"动词","def_cn":"想念，渴望","def_ar":"رَغِبَ فِي","plural":"","fem":"","present":"يَشْتَاقُ","source":"اِشْتِيَاقًا","collo_ar":"اِشْتَاقَ إِلَى وَطَنِهِ","collo_cn":"思念祖国","sent_ar":"اِشْتَقْتُ إِلَيْكَ كَثِيرًا.","sent_cn":"我很想念你。"},{"id":9,"word":"فَتْرَة","ipa":"[fatra]","root":"فتر","pos":"名词","def_cn":"一段时间，时期","def_ar":"مُدَّةٌ مِنَ الزَّمَنِ","plural":"فَتَرَات","fem":"","present":"","source":"","collo_ar":"فَتْرَةٌ طَوِيلَةٌ","collo_cn":"很长一段时间","sent_ar":"سَأَغِيبُ لِفَتْرَةٍ قَصِيرَةٍ.","sent_cn":"我会离开一小会儿。"},{"id":10,"word":"وَلَد","ipa":"[walad]","root":"ولد","pos":"名词","def_cn":"孩子，男孩","def_ar":"اِبْنٌ / صَبِيٌّ","plural":"أَوْلَاد","fem":"","present":"","source":"","collo_ar":"وَلَدٌ مُهَذَّبٌ","collo_cn":"有教养的孩子","sent_ar":"يَلْعَبُ الْوَلَدُ فِي الْحَدِيقَةِ.","sent_cn":"男孩在花园里玩耍。"},{"id":11,"word":"قَبَّلَ","ipa":"[qabbala]","root":"قبل","pos":"动词","def_cn":"接吻，亲吻","def_ar":"لَثَمَ","plural":"","fem":"","present":"يُقَبِّلُ","source":"تَقْبِيلاً","collo_ar":"قَبَّلَ يَدَ أُمِّهِ","collo_cn":"亲吻母亲的手","sent_ar":"قَبَّلَ الْأَبُ طِفْلَهُ.","sent_cn":"父亲亲吻了他的孩子。"},{"id":12,"word":"يَد","ipa":"[yad]","root":"يدي","pos":"名词","def_cn":"手","def_ar":"طَرَفٌ","plural":"أَيْدٍ","fem":"","present":"","source":"","collo_ar":"يَدٌ بِيَدٍ","collo_cn":"手拉手","sent_ar":"غَسَلَ الطِّفْلُ يَدَيْهِ.","sent_cn":"孩子洗了他的双手。"},{"id":13,"word":"طَرَف","ipa":"[ṭaraf]","root":"طرف","pos":"名词","def_cn":"端，方面","def_ar":"نِهَايَةُ الشَّيْءِ","plural":"أَطْرَاف","fem":"","present":"","source":"","collo_ar":"مِنَ الطَّرَفِ الْآخَرِ","collo_cn":"另一方面","sent_ar":"أَمْسَكَ بِطَرَفِ الْحَبْلِ.","sent_cn":"他抓住了绳子的一端。"},{"id":14,"word":"جَاهِز","ipa":"[jāhiz]","root":"جهز","pos":"形容词","def_cn":"预备好的，现成的","def_ar":"مُسْتَعِدٌّ","plural":"جَاهِزُون","fem":"جَاهِزَة","present":"","source":"","collo_ar":"طَعَامٌ جَاهِزٌ","collo_cn":"即食食品","sent_ar":"هَلْ أَنْتَ جَاهِزٌ لِلسَّفَرِ؟","sent_cn":"你准备好旅行了吗？"},{"id":15,"word":"رَأْس","ipa":"[ra's]","root":"رأس","pos":"名词","def_cn":"头，顶端","def_ar":"أَعْلَى الشَّيْءِ","plural":"رُؤُوس","fem":"","present":"","source":"","collo_ar":"عَلَى الرَّأْسِ وَالْعَيْنِ","collo_cn":"非常乐意","sent_ar":"يُؤْلِمُنِي رَأْسِي.","sent_cn":"我头痛。"},{"id":16,"word":"قَدَّمَ","ipa":"[qaddama]","root":"قدم","pos":"动词","def_cn":"提供，呈递","def_ar":"أَعْطَى / عَرَضَ","plural":"","fem":"","present":"يُقَدِّمُ","source":"تَقْدِيمًا","collo_ar":"قَدَّمَ طَلَبًا","collo_cn":"提交申请","sent_ar":"قَدَّمَ لَهُ هَدِيَّةً قَيِّمَةً.","sent_cn":"他送给他一份珍贵的礼物。"},{"id":17,"word":"شَرَاب","ipa":"[sharāb]","root":"شرب","pos":"名词","def_cn":"饮料","def_ar":"مَا يُشْرَبُ","plural":"أَشْرِبَة","fem":"","present":"","source":"","collo_ar":"شَرَابُ الْفَاكِهَةِ","collo_cn":"果汁饮料","sent_ar":"هَذَا شَرَابٌ لَذِيذٌ.","sent_cn":"这种饮料很好喝。"},{"id":18,"word":"خَدَمَ","ipa":"[khadama]","root":"خدم","pos":"动词","def_cn":"服务，效劳","def_ar":"قَامَ بِالْخِدْمَةِ","plural":"","fem":"","present":"يَخْدُمُ","source":"خِدْمَةً","collo_ar":"خَدَمَ وَطَنَهُ","collo_cn":"报效祖国","sent_ar":"يَخْدُمُ الْمُوَظَّفُ الْعُمَلَاءَ.","sent_cn":"职员为客户服务。"},{"id":19,"word":"هَاتِ","ipa":"[hāti]","root":"-","pos":"动词","def_cn":"把…拿过来（命令）","def_ar":"أَعْطِنِي","plural":"","fem":"","present":"","source":"","collo_ar":"هَاتِ مَا عِنْدَكَ","collo_cn":"把你有的拿出来","sent_ar":"هَاتِ الْكِتَابَ يَا مُحَمَّدُ.","sent_cn":"穆罕默德，把书拿过来。"},{"id":20,"word":"لَوْن","ipa":"[lawn]","root":"لون","pos":"名词","def_cn":"颜色，种类","def_ar":"صِبْغَة","plural":"أَلْوَان","fem":"","present":"","source":"","collo_ar":"أَلْوَانٌ زَاهِيَةٌ","collo_cn":"鲜艳的颜色","sent_ar":"مَا لَوْنُكَ الْمُفَضَّلُ؟","sent_cn":"你最喜欢的颜色是什么？"},{"id":21,"word":"دُونَ","ipa":"[dūna]","root":"دون","pos":"虚词","def_cn":"不…，没有…","def_ar":"بِغَيْرِ","plural":"","fem":"","present":"","source":"","collo_ar":"دُونَ تَرَدُّدٍ","collo_cn":"毫不犹豫","sent_ar":"فَعَلَ ذَلِكَ دُونَ قَصْدٍ.","sent_cn":"他无意中做了这件事。"},{"id":22,"word":"ذَاقَ","ipa":"[dhāqa]","root":"ذوق","pos":"动词","def_cn":"尝，品尝","def_ar":"اِخْتَبَرَ الطَّعْمَ","plural":"","fem":"","present":"يَذُوقُ","source":"ذَوْقًا","collo_ar":"ذَاقَ مَرَارَةَ الْعَيْشِ","collo_cn":"尝尽生活艰辛","sent_ar":"ذَاقَ الطَّبَّاخُ الْحِسَاءَ.","sent_cn":"厨师尝了尝汤。"},{"id":23,"word":"مَشْوِيّ","ipa":"[mashwiyy]","root":"شوي","pos":"形容词","def_cn":"烤的，烤熟的","def_ar":"مَطْبُوخٌ عَلَى النَّارِ","plural":"","fem":"مَشْوِيَّة","present":"","source":"","collo_ar":"لَحْمٌ مَشْوِيٌّ","collo_cn":"烤肉","sent_ar":"أُحِبُّ الدَّجَاجَ الْمَشْوِيَّ.","sent_cn":"我喜欢吃烤鸡。"},{"id":24,"word":"طَعْم","ipa":"[ṭa'm]","root":"طعم","pos":"名词","def_cn":"味道，滋味","def_ar":"مَذَاق","plural":"طُعُوم","fem":"","present":"","source":"","collo_ar":"طَعْمٌ حُلْوٌ","collo_cn":"甜味","sent_ar":"طَعْمُ هَذِهِ الْفَاكِهَةِ رَائِعٌ.","sent_cn":"这种水果的味道很棒。"},{"id":25,"word":"قِطْعَة","ipa":"[qiṭ'a]","root":"قطع","pos":"名词","def_cn":"块，段，截","def_ar":"جُزْء","plural":"قِطَع","fem":"","present":"","source":"","collo_ar":"قِطْعَةُ قُمَاشٍ","collo_cn":"一块布","sent_ar":"أَكَلَ قِطْعَةً مِنَ الْخُبْزِ.","sent_cn":"他吃了一块面包。"},{"id":26,"word":"شَبِعَ","ipa":"[shabi'a]","root":"شبع","pos":"动词","def_cn":"吃饱","def_ar":"اِمْتَلَأَ","plural":"","fem":"","present":"يَشْبَعُ","source":"شَبَعًا","collo_ar":"شَبِعَ مِنَ النَّوْمِ","collo_cn":"睡足了","sent_ar":"شَبِعَ الضَّيْفُ تَمَامًا.","sent_cn":"客人完全吃饱了。"},{"id":27,"word":"مِقْدَار","ipa":"[miqdār]","root":"قدر","pos":"名词","def_cn":"数量，分量","def_ar":"كَمِّيَّة","plural":"مَقَادِير","fem":"","present":"","source":"","collo_ar":"مِقْدَارٌ ضَئِيلٌ","collo_cn":"少量","sent_ar":"أَضَافَ مِقْدَارًا مِنَ الْمِلْحِ.","sent_cn":"他加了一定量的盐。"},{"id":28,"word":"طَاقَة","ipa":"[ṭāqa]","root":"طوق","pos":"名词","def_cn":"能力，能量","def_ar":"قُدْرَة","plural":"طَاقَات","fem":"","present":"","source":"","collo_ar":"طَاقَةٌ شَمْسِيَّةٌ","collo_cn":"太阳能","sent_ar":"لَا طَاقَةَ لِي بِهَذَا الْعَمَلِ.","sent_cn":"我没有能力做这项工作。"},{"id":29,"word":"عُصْفُور","ipa":"['uṣfūr]","root":"عصفر","pos":"名词","def_cn":"小鸟，麻雀","def_ar":"طَائِرٌ صَغِيرٌ","plural":"عَصَافِير","fem":"","present":"","source":"","collo_ar":"زَقْزَقَةُ الْعُصْفُورِ","collo_cn":"鸟鸣声","sent_ar":"يُغَرِّدُ الْعُصْفُورُ فَوْقَ الشَّجَرَةِ.","sent_cn":"小鸟在树上歌唱。"},{"id":30,"word":"سَلِمَ","ipa":"[salima]","root":"سلم","pos":"动词","def_cn":"完好，平安","def_ar":"نَجَا","plural":"","fem":"","present":"يَسْلَمُ","source":"سَلَامَةً","collo_ar":"سَلِمَ مِنَ الْمَرَضِ","collo_cn":"免于疾病","sent_ar":"سَلِمَ الْمُسَافِرُونَ مِنَ الْحَادِثِ.","sent_cn":"旅客们在事故中幸免于难。"},{"id":31,"word":"عَفَا","ipa":"['afā]","root":"عفو","pos":"动词","def_cn":"原谅，宽恕","def_ar":"سَامَحَ","plural":"","fem":"","present":"يَعْفُو","source":"عَفْوًا","collo_ar":"عَفَا عَنِ الْمُسِيءِ","collo_cn":"宽恕作恶者","sent_ar":"عَفَا اللهُ عَمَّا سَلَفَ.","sent_cn":"既往不咎。"},{"id":32,"word":"ضِيَافَة","ipa":"[ḍiyāfa]","root":"ضيف","pos":"名词","def_cn":"招待，款待","def_ar":"إِكْرَامُ الضَّيْفِ","plural":"","fem":"","present":"","source":"","collo_ar":"كَرَمُ الضِّيَافَةِ","collo_cn":"殷勤好客","sent_ar":"قَدَّمَ لَهُمْ أَحْسَنَ ضِيَافَةٍ.","sent_cn":"他给予了他们最好的款待。"},{"id":33,"word":"حَفَاوَة","ipa":"[ḥafāwa]","root":"حفو","pos":"名词","def_cn":"盛情，热烈","def_ar":"إِكْرَامٌ بَالِغٌ","plural":"","fem":"","present":"","source":"","collo_ar":"حَفَاوَةُ الِاسْتِقْبَالِ","collo_cn":"隆重接待","sent_ar":"اُسْتُقْبِلَ بِحَفَاوَةٍ بَالِغَةٍ.","sent_cn":"他受到了极热烈的欢迎。"},{"id":34,"word":"وَحْدَة","ipa":"[waḥda]","root":"وحد","pos":"名词","def_cn":"单位，统一","def_ar":"اِتِّحَاد","plural":"وَحَدَات","fem":"","present":"","source":"","collo_ar":"الْوَحْدَةُ الْعَرَبِيَّةُ","collo_cn":"阿拉伯统一","sent_ar":"الْوَحْدَةُ قُوَّةٌ.","sent_cn":"团结就是力量。"},{"id":35,"word":"أَسَاسِيّ","ipa":"[asāsiyy]","root":"أسس","pos":"形容词","def_cn":"基本的，根本的","def_ar":"جَوْهَرِيّ","plural":"","fem":"أَسَاسِيَّة","present":"","source":"","collo_ar":"شَرْطٌ أَسَاسِيٌّ","collo_cn":"基本条件","sent_ar":"الْمَاءُ حَاجَةٌ أَسَاسِيَّةٌ.","sent_cn":"水是基本需求。"},{"id":36,"word":"بَنَى","ipa":"[banā]","root":"بني","pos":"动词","def_cn":"建设，建造","def_ar":"شَيَّدَ","plural":"","fem":"","present":"يَبْنِي","source":"بِنَاءً","collo_ar":"بَنَى مُسْتَقْبَلَهُ","collo_cn":"建设未来","sent_ar":"بَنَى الْمُهَنْدِسُ جِسْرًا.","sent_cn":"工程师建造了一座桥。"},{"id":37,"word":"مُجْتَمَع","ipa":"[mujtama']","root":"جمع","pos":"名词","def_cn":"社会","def_ar":"بِيئَة","plural":"مُجْتَمَعَات","fem":"","present":"","source":"","collo_ar":"مُجْتَمَعٌ مُتَحَضِّرٌ","collo_cn":"文明社会","sent_ar":"يَعِيشُ الْفَرْدُ فِي الْمُجْتَمَعِ.","sent_cn":"个人生活在社会中。"},{"id":38,"word":"اِجْتِمَاعِيّ","ipa":"[ijtimā'iyy]","root":"جمع","pos":"形容词","def_cn":"社会的","def_ar":"مَنْسُوبٌ لِلْمُجْتَمَعِ","plural":"","fem":"اِجْتِمَاعِيَّة","present":"","source":"","collo_ar":"عِلَاقَاتٌ اِجْتِمَاعِيَّةٌ","collo_cn":"社会关系","sent_ar":"هُوَ شَخْصٌ اِجْتِمَاعِيٌّ.","sent_cn":"他是个善于交际的人。"},{"id":39,"word":"عَلَى الرَّغْمِ مِنْ","ipa":"['alā ar-raghmi min]","root":"رغم","pos":"短语","def_cn":"尽管……","def_ar":"مَعَ أَنَّ...","plural":"","fem":"","present":"","source":"","collo_ar":"عَلَى الرَّغْمِ مِنَ الصُّعُوبَاتِ","collo_cn":"尽管有困难","sent_ar":"نَجَحَ عَلَى الرَّغْمِ مِنْ مَرَضِهِ.","sent_cn":"尽管生病了他还是成功了。"},{"id":40,"word":"صِفَة","ipa":"[ṣifa]","root":"وصف","pos":"名词","def_cn":"特征，属性","def_ar":"نَعْت","plural":"صِفَات","fem":"","present":"","source":"","collo_ar":"صِفَةٌ حَمِيدَةٌ","collo_cn":"优良品质","sent_ar":"الصِّدْقُ صِفَةُ الْمُؤْمِنِ.","sent_cn":"诚实是信士的品质。"},{"id":41,"word":"اِمْتَازَ","ipa":"[imtāza]","root":"ميز","pos":"动词","def_cn":"具有（长处）","def_ar":"تَفَوَّقَ","plural":"","fem":"","present":"يَمْتَازُ","source":"اِمْتِيَازًا","collo_ar":"يَمْتَازُ بِالذَّكَاءِ","collo_cn":"天资聪颖","sent_ar":"يَمْتَازُ هَذَا الْجِهَازُ بِالْجَوْدَةِ.","sent_cn":"这个设备以质量优良著称。"},{"id":42,"word":"كَرَم","ipa":"[karam]","root":"كرم","pos":"名词","def_cn":"慷慨，大方","def_ar":"سَخَاء","plural":"","fem":"","present":"","source":"","collo_ar":"أَهْلُ الْكَرَمِ","collo_cn":"慷慨之家","sent_ar":"اُشْتُهِرَ الْعَرَبُ بِالْكَرَمِ.","sent_cn":"阿拉伯人以慷慨著称。"},{"id":43,"word":"أَظْهَرَ","ipa":"[aẓhara]","root":"ظهر","pos":"动词","def_cn":"显示，表现","def_ar":"أَبَانَ","plural":"","fem":"","present":"يُظْهِرُ","source":"إِظْهَارًا","collo_ar":"أَظْهَرَ شَجَاعَةً","collo_cn":"表现出勇气","sent_ar":"أَظْهَرَ النَّتَائِجَ الْإِيجَابِيَّةَ.","sent_cn":"他展示了积极的结果。"},{"id":44,"word":"رَحَّبَ","ipa":"[raḥḥaba]","root":"رحب","pos":"动词","def_cn":"欢迎","def_ar":"اِسْتَقْبَلَ","plural":"","fem":"","present":"يُرَحِّبُ","source":"تَرْحِيبًا","collo_ar":"رَحَّبَ بِالضُّيُوفِ","collo_cn":"欢迎客人","sent_ar":"نُرَحِّبُ بِكُمْ فِي بَلَدِنَا.","sent_cn":"我们欢迎你们来到我们国家。"},{"id":45,"word":"مَدْعُوّ","ipa":"[mad'uww]","root":"دعو","pos":"名词","def_cn":"应邀者","def_ar":"ضَيْف","plural":"مَدْعُوُّون","fem":"مَدْعُوَّة","present":"","source":"","collo_ar":"قَائِمَةُ الْمَدْعُوِّينَ","collo_cn":"邀请名单","sent_ar":"كَانَ عَدَدُ الْمَدْعُوِّينَ كَبِيرًا.","sent_cn":"被邀请的人数很多。"},{"id":46,"word":"مَسْؤُول","ipa":"[mas'ūl]","root":"سأل","pos":"名词","def_cn":"负责人，领导","def_ar":"مُشْرِف","plural":"مَسْؤُولُون","fem":"مَسْؤُولَة","present":"","source":"","collo_ar":"مَسْؤُولٌ حُكُومِيٌّ","collo_cn":"政府官员","sent_ar":"هُوَ الْمَسْؤُولُ عَنِ الْمَشْرُوعِ.","sent_cn":"他是这个项目的负责人。"},{"id":47,"word":"اِقْتِصَادِيّ","ipa":"[iqtiṣādiyy]","root":"قصد","pos":"形容词","def_cn":"经济的","def_ar":"-","plural":"","fem":"اِقْتِصَادِيَّة","present":"","source":"","collo_ar":"نُمُوٌّ اِقْتِصَادِيٌّ","collo_cn":"经济增长","sent_ar":"الْوَضْعُ الِاقْتِصَادِيُّ جَيِّدٌ.","sent_cn":"经济状况良好。"},{"id":48,"word":"عُضْو","ipa":"['uḍw]","root":"عضو","pos":"名词","def_cn":"成员；肢体","def_ar":"فَرْد","plural":"أَعْضَاء","fem":"","present":"","source":"","collo_ar":"عُضْوٌ فِي اللَّجْنَةِ","collo_cn":"委员会成员","sent_ar":"سَجَّلْتُ كَعُضْوٍ جَدِيدٍ.","sent_cn":"我注册成为了一名新成员。"},{"id":49,"word":"رَبَّى","ipa":"[rabbā]","root":"ربو","pos":"动词","def_cn":"培养，抚育","def_ar":"أَنْشَأَ","plural":"","fem":"","present":"يُرَبِّي","source":"تَرْبِيَةً","collo_ar":"رَبَّى أَوْلَادَهُ","collo_cn":"抚养孩子","sent_ar":"تُرَبِّي الْأُمُّ أَبْنَاءَهَا.","sent_cn":"母亲培育她的孩子们。"},{"id":50,"word":"اِعْتَنَى","ipa":"[i'tanā]","root":"عني","pos":"动词","def_cn":"关心，照料","def_ar":"اِهْتَمَّ","plural":"","fem":"","present":"يَعْتَنِي","source":"اِعْتِنَاءً","collo_ar":"اِعْتَنَى بِصِحَّتِهِ","collo_cn":"照顾健康","sent_ar":"يَجِبُ أَنْ تَعْتَنِيَ بِنَفْسِكَ.","sent_cn":"你必须照顾好你自己。"},{"id":51,"word":"عِنَايَة","ipa":"['ināya]","root":"عني","pos":"名词","def_cn":"关心，照料","def_ar":"اِهْتِمَام","plural":"عِنَايَات","fem":"","present":"","source":"","collo_ar":"غُرْفَةُ الْعِنَايَةِ","collo_cn":"监护室","sent_ar":"شُكْرًا عَلَى عِنَايَتِكَ.","sent_cn":"谢谢你的关照。"},{"id":52,"word":"دَقِيق","ipa":"[daqīq]","root":"دقق","pos":"形容词","def_cn":"细的，精细的","def_ar":"مُتْقَن","plural":"","fem":"دَقِيقَة","present":"","source":"","collo_ar":"فُحْصٌ دَقِيقٌ","collo_cn":"仔细检查","sent_ar":"هَذَا جِهَازٌ دَقِيقٌ جِدًّا.","sent_cn":"这是一个非常精密的仪器。"},{"id":53,"word":"جَنَّة","ipa":"[janna]","root":"جنن","pos":"名词","def_cn":"天堂，乐园","def_ar":"حَدِيقَة","plural":"جَنَّات","fem":"","present":"","source":"","collo_ar":"دُخُولُ الْجَنَّةِ","collo_cn":"进入天堂","sent_ar":"الْجَنَّةُ تَحْتَ أَقْدَامِ الْأُمَّهَاتِ.","sent_cn":"天堂在母亲的脚下。"},{"id":54,"word":"رَابِطَة","ipa":"[rābiṭa]","root":"ربط","pos":"名词","def_cn":"联系；协会","def_ar":"عَلَاقَة","plural":"رَوَابِط","fem":"","present":"","source":"","collo_ar":"رَابِطَةُ الدَّمِ","collo_cn":"血缘关系","sent_ar":"أَسَّسُوا رَابِطَةَ الطُّلَّابِ.","sent_cn":"他们建立了学生协会。"},{"id":55,"word":"قَرِيب","ipa":"[qarīb]","root":"قرب","pos":"名词","def_cn":"亲戚，亲属","def_ar":"نَسِيب","plural":"أَقَارِب","fem":"","present":"","source":"","collo_ar":"قَرِيبٌ مِنْ هُنَا","collo_cn":"离这儿近","sent_ar":"زَارَ الْأَقَارِبَ فِي الْعُطْلَةِ.","sent_cn":"他在假期拜访了亲戚。"},{"id":56,"word":"تَعَاوَنَ","ipa":"[ta'āwana]","root":"عون","pos":"动词","def_cn":"合作，互助","def_ar":"تَشَارَكَ","plural":"","fem":"","present":"يَتَعَاوَنُ","source":"تَعَاوُنًا","collo_ar":"تَعَاوَنَ مَعَ زُمَلَائِهِ","collo_cn":"与同事合作","sent_ar":"تَعَاوَنَ الْجَمِيعُ فِي الْعَمَلِ.","sent_cn":"大家在工作中合作。"},{"id":57,"word":"بَلْ","ipa":"[bal]","root":"-","pos":"虚词","def_cn":"而且；而是","def_ar":"لِلْإِضْرَابِ","plural":"","fem":"","present":"","source":"","collo_ar":"لَا أَكْتُبُ بَلْ أَقْرَأُ","collo_cn":"我不在写，而是在读","sent_ar":"لَمْ يَحْضُرْ أَحْمَدُ بَلْ عَلِيٌّ.","sent_cn":"艾哈迈德没来，而是阿里来了。"},{"id":58,"word":"مِنَ السَّائِدِ أَنْ","ipa":"[mina as-sā'idi an]","root":"سود","pos":"短语","def_cn":"盛行的，普遍的","def_ar":"مُنْتَشِرٌ","plural":"","fem":"","present":"","source":"","collo_ar":"مِنَ السَّائِدِ أَنْ","collo_cn":"普遍的是","sent_ar":"مِنَ السَّائِدِ اسْتِخْدَامُ الْهَاتِفِ.","sent_cn":"使用电话是普遍现象。"},{"id":59,"word":"أَقَامَ","ipa":"[aqāma]","root":"قوم","pos":"动词","def_cn":"竖起，举行","def_ar":"أَنْشَأَ","plural":"","fem":"","present":"يُقِيمُ","source":"إِقَامَةً","collo_ar":"أَقَامَ حَفْلَةً","collo_cn":"举办晚会","sent_ar":"أَقَامَتِ الدَّوْلَةُ مَشَارِيعَ.","sent_cn":"国家建立了许多项目。"},{"id":60,"word":"مِنَ الْمَعْرُوفِ أَنْ","ipa":"[mina al-ma'rūfi an]","root":"عرف","pos":"短语","def_cn":"众所周知……","def_ar":"مَشْهُورٌ","plural":"","fem":"","present":"","source":"","collo_ar":"مِنَ الْمَعْرُوفِ أَنَّهُ...","collo_cn":"众所周知他...","sent_ar":"مِنَ الْمَعْرُوفِ أَنَّ الْأَرْضَ كُرَوِيَّةٌ.","sent_cn":"众所周知地球是圆的。"},{"id":61,"word":"تَقْلِيدِيّ","ipa":"[taqlīdiyy]","root":"قلد","pos":"形容词","def_cn":"传统的","def_ar":"مُتَوَارَث","plural":"","fem":"تَقْلِيدِيَّة","present":"","source":"","collo_ar":"لِبَاسٌ تَقْلِيدِيٌّ","collo_cn":"传统服装","sent_ar":"يُحَافِظُ عَلَى الْفَنِّ التَّقْلِيدِيِّ.","sent_cn":"他保持着传统艺术。"},{"id":62,"word":"ظَاهِرَة","ipa":"[ẓāhira]","root":"ظهر","pos":"名词","def_cn":"现象","def_ar":"أَمْرٌ وَاقِعٌ","plural":"ظَوَاهِر","fem":"","present":"","source":"","collo_ar":"ظَاهِرَةٌ طَبِيعِيَّةٌ","collo_cn":"自然现象","sent_ar":"ظَاهِرَةُ الِاحْتِبَاسِ الْحَرَارِيِّ.","sent_cn":"全球变暖现象。"},{"id":63,"word":"عَصْر","ipa":"['aṣr]","root":"عصر","pos":"名词","def_cn":"时代","def_ar":"زَمَن","plural":"عُصُور","fem":"","present":"","source":"","collo_ar":"الْعَصْرُ الْحَدِيثُ","collo_cn":"现代","sent_ar":"نَعِيشُ فِي عَصْرِ التِّكْنُولُوجِيَا.","sent_cn":"我们生活在科技时代。"}];
+let currentIndex = 0;
+let score = 0;
+let isAnswered = false;
+let currentWordObj = null;
+let pointsPerWord = 0;
+
+// 洗牌算法
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!vocabData || vocabData.length === 0) { alert('没有数据'); return; }
+    // 1. 随机打乱单词顺序
+    shuffleArray(vocabData);
+    // 2. 计算单题分值 (总分100)
+    pointsPerWord = 100 / vocabData.length;
+    loadCard(currentIndex);
+});
+
+function loadCard(index) {
+    closeSheet();
+    setTimeout(() => {
+        isAnswered = false;
+        currentWordObj = vocabData[index];
+        document.getElementById('progress-text').innerText = (index + 1) + " / " + vocabData.length;
+        document.getElementById('pos-display').innerText = currentWordObj.pos;
+        document.getElementById('word-display').innerText = currentWordObj.word;
+        document.getElementById('ipa-display').innerText = currentWordObj.ipa;
+
+        const tagsContainer = document.getElementById('tags-container');
+        tagsContainer.innerHTML = '';
+        const addTag = (l, v) => { if(v && v!=='-') tagsContainer.innerHTML += '<div class="tag"><span style="opacity:0.6;font-size:10px;margin-right:2px;">'+l+'</span><span class="tag-val">'+v+'</span></div>'; };
+        addTag('根',currentWordObj.root); addTag('复',currentWordObj.plural); addTag('现',currentWordObj.present); addTag('阴',currentWordObj.fem); addTag('源',currentWordObj.source);
+
+        generateOptions(currentWordObj);
+
+        document.getElementById('sheet-def-cn').innerText = currentWordObj.def_cn;
+        document.getElementById('sheet-def-ar').innerText = currentWordObj.def_ar || '';
+        const setDetail = (idB, idA, idC, vA, vC) => {
+            const box = document.getElementById(idB);
+            if(!vA && !vC) box.style.display='none'; else { box.style.display='block'; document.getElementById(idA).innerText=vA||''; document.getElementById(idC).innerText=vC||''; }
+        };
+        setDetail('sheet-collo-box','sheet-collo-ar','sheet-collo-cn',currentWordObj.collo_ar,currentWordObj.collo_cn);
+        setDetail('sheet-sent-box','sheet-sent-ar','sheet-sent-cn',currentWordObj.sent_ar,currentWordObj.sent_cn);
+    }, 200);
+}
+
+function generateOptions(correctObj) {
+    const container = document.getElementById('options-container');
+    container.innerHTML = '';
+    // 确保干扰项不包含当前词，且也是随机抽取的
+    let distractors = vocabData.filter(item => item.id !== correctObj.id).map(item => item.def_cn);
+    shuffleArray(distractors); 
+    let options = distractors.slice(0, 3);
+    options.push(correctObj.def_cn);
+    shuffleArray(options);
+    
+    options.forEach(optText => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = optText;
+        btn.onclick = () => checkAnswer(btn, optText === correctObj.def_cn);
+        container.appendChild(btn);
+    });
+}
+
+function checkAnswer(btn, isCorrect) {
+    if (isAnswered) return;
+    isAnswered = true;
+    const allBtns = document.querySelectorAll('.option-btn');
+    if (isCorrect) {
+        btn.classList.add('correct');
+        // 累加分数
+        score += pointsPerWord;
+        document.getElementById('score-text').innerText = "得分: " + Math.round(score);
+        speakCurrent();
+    } else {
+        btn.classList.add('wrong');
+        allBtns.forEach(b => { if(b.innerText===currentWordObj.def_cn) b.classList.add('correct'); });
+        setTimeout(openSheet, 400);
+    }
+}
+
+function nextWord() {
+    if (currentIndex < vocabData.length - 1) { currentIndex++; loadCard(currentIndex); }
+    else { alert("测试结束！最终得分: " + Math.round(score)); location.reload(); } // 结束后刷新重新开始
+}
+
+function speakCurrent() {
+    if(!currentWordObj) return;
+    const u = new SpeechSynthesisUtterance(currentWordObj.word);
+    u.lang = 'ar-SA'; u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+}
+
+function openSheet(){document.querySelector('.modal-overlay').classList.add('show');document.getElementById('detail-sheet').classList.add('show');}
+function closeSheet(){document.querySelector('.modal-overlay').classList.remove('show');document.getElementById('detail-sheet').classList.remove('show');}
+</script></body></html>
